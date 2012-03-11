@@ -1,0 +1,73 @@
+This is a universal parser generator that walks a syntax tree while parsing a
+file. It currently parses a crummy tiny lisp using the handmade data structures
+at the bottom of the file.
+
+The projec currently consists of a dll project, a driver app, and a Samples
+directory. not to mention a test application. I may even go all out and add a
+GUI with a universal REPL whose default action is to spit your tokens back at
+you.
+
+After or concurrently with that move/merge, I'll be hand crafting a syntax tree
+for a dialect of EBNF and adding serialization/deserialization to syntax trees. 
+After that, a compiler to turn the output of parsed EBNF into a syntax tree. Et,
+voila! You can parse any context-free grammar.
+
+The impetus behind this project is that I had the realization that if you
+tokenize the source code, the very same engine that does the scanning 
+(tokenizing) can do the parsing (grammar checking), combined with the 
+realization that a parser generator shouldn't generate code, but rather syntax
+ trees.
+
+ISSUES:
+--No error messages. Good luck figuring out why your parser blew up. Adding 
+error messages with line number and parser/scanner origin info is a high 
+priority.
+
+--No documentation. The example scanner, parser, and compiler exercise most of
+the current functionality of the tool. If you've never parsed before, or even
+if you have, it might be a bit of a trick to get it doing anything other than 
+the demo functionality. In a nutshell:
+
+  1. Your code gets slurped whole into a CodeStream so that it can be doled out
+     as a stream of tokens, one for each character.
+  2. The scanner talks to the CodeStream to get text tokens to parse, building 
+     up the lexical structure of your grammar. But only when Scanner.ReadToken()
+     is called by...
+  3. ...the parser, which checks the grammar against a list of productions and 
+     sends completed productions off to the compiler, (which might as well be an
+     interpreter).
+
+--Hard-coded filenames. No UI, graphical or otherwise, for this. Simply edit the
+strings in the source. It's on its way, though!
+
+--No left-recursion checks. Again, experience needed. You need to know how to 
+design a grammar that doesn't infinitely recurse. Briefly:
+
+	expr:= (expr (+ expr)*) | /[a-z]/;
+
+is immediately left-recursive and will loop forever. What you want is more like:
+
+	expr:= expr_initial expr_consequent*;
+	expr_item:= /[a-z]/;
+	expr_initial := expr_item;
+	expr_consequent := (+ expr_item);
+
+The former encounters something that may be an expression and immediately asks,
+"Is this an expression?". This causes it to ask again, "Is this an expression?"
+This causes it....
+
+The latter encounters a possible expression and asks, "Does the first part of
+this look like the first part of an expression?," and then happily continues
+consuming tokens 	until it gets an answer one way or the other.
+
+None of that will make any sense to you in terms of GrammarNode objects if 
+you've never considered manually creating a syntax tree before. Or maybe even if
+ you have.
+
+I'm undecided on left-recursion checks. They fail early, and if I give you an
+error message, you'll blame me. If you go hunting on the Net for an answer,
+you'll blame yourself and leave me alone. Decisions, decisions, ....
+
+--Wayyy too much fun. In spite of, or maybe because of, the issues above, it's
+crazy amounts of fun to input a file and watch tokens stream out the other end
+of the thing into another file.
