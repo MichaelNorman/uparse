@@ -12,28 +12,38 @@ namespace uparse
     {
         static void Main(string[] args)
         {
-            
-
-            //TestLanguage Lispish = new TestLanguage();
-            String TestFile = @"..\..\..\Samples\test.lisp";
-            StreamReader cs = new StreamReader(TestFile);
+            String ebnf_source_file_path = @"..\..\..\Samples\ebnf_ebnf.txt";
+            StreamReader cs = new StreamReader(ebnf_source_file_path);
             String Code = cs.ReadToEnd();
             CodeStream code_tokens = new CodeStream(Code);
-            String OutputFile = @"..\..\..\Samples\test.out.txt";
+            String OutputFile = @"..\..\..\Samples\ebnf.out.txt";
+            //StreamWriter of = File.CreateText(OutputFile);
+            //of.AutoFlush = true;
 
 
-            //TestLanguage my_tl = new TestLanguage();
-            Stream TestLanguageStream = File.OpenRead(@"..\..\..\Samples\persistence_test");
-            BinaryFormatter bf = new BinaryFormatter();
-            TestLanguage my_tl = (TestLanguage)bf.Deserialize(TestLanguageStream);
-            Scanner SourceScanner = new Scanner(code_tokens, my_tl.ScannerProductions, my_tl.Ignore);
-            Parser TestLanguageParser = new Parser(new DiagnosticCompiler(OutputFile), SourceScanner, my_tl.ParserProductions);
-            TestLanguageStream.Close();
-
-            TestLanguageParser.Parse();
-            Stream TestLanguageFile = File.Create(@"..\..\..\Samples\persistence_test");
+            EBNF ebnf = new EBNF();
+            //Stream ebnf_persistence_file_stream = File.OpenRead(@"..\..\..\Samples\ebnf_persist");
             //BinaryFormatter bf = new BinaryFormatter();
-            bf.Serialize(TestLanguageFile, my_tl);
+            //TestLanguage my_tl = (TestLanguage)bf.Deserialize(TestLanguageStream);
+            Scanner SourceScanner = new Scanner(code_tokens, ebnf.ScannerProductions, ebnf.Ignore);
+            Parser EBNFLanguageParser = new Parser(new DiagnosticCompiler(OutputFile), SourceScanner, ebnf.ParserProductions);
+            //TestLanguageStream.Close();
+
+            EBNFLanguageParser.Parse();
+
+            /*while (true)
+            {
+                Token current = SourceScanner.ReadToken();
+                Console.WriteLine(current.TokenType + " : " + current.Value);
+                of.WriteLine(current.TokenType + " : " + current.Value);
+                if (SourceScanner.EOF)
+                {
+                    break;
+                }
+            }*/
+            Stream ebnf_persistence_file_stream = File.Create(@"..\..\..\Samples\persistence_test");
+            BinaryFormatter bf = new BinaryFormatter();
+            bf.Serialize(ebnf_persistence_file_stream, ebnf);
             Console.WriteLine(Directory.GetCurrentDirectory());
             Console.ReadKey();
             

@@ -1,0 +1,58 @@
+%% EBNF
+
+% scanner
+
+environment_name:= "scanner" | "parser";
+name:= name_initial name_subsequent*;
+name_initial:=/[a-z]/;
+name_subsequent := /[a-z0-9_]/;
+
+assignment:= ":=";
+
+whitespace:= whitespace_char+;
+whitespace_char:= /\\s/;
+
+regex:= regex_initial regex_piece+ regex_terminal;
+regex_piece:= /[^\\\/]/ | escape_sequence;
+escape_sequence:= "\\" /./;
+
+terminator:= ";";
+
+string:= quote string_element* quote;
+quote:= "\"";
+string_element:= /[^\\"]/ | escape_sequence;
+
+quantifier:= "*" | "+" | "?";
+
+comment:= "//" non_newline*;
+non_newline:= /[^\n]/;
+
+pipe:= "|";
+
+language_name:= "%" whitespace? mixed_case_name;
+mixed_case_name:= mixed_initial mixed_subsequent*;
+mixed_initial := /[a-zA-Z]/;
+mixed_subsequent := /[a-zA-Z0-9_]/;
+
+// The special name "ignore" causes the scanner to swallow these tokens.
+
+ignore:= comment | whitespace;
+
+%parser
+
+language_specifier:= language_name;
+
+environment_specifier:= environment_name;
+
+production:= production_name assignment sequence alternation_subsequent* terminator;
+
+production_name:= ignore_name | name;
+
+sequence:= sequence_atom+;
+
+sequence_atom:= quantified_name | quantified_string | regex;
+
+quantified_string:= string quantifier?;
+quantified_name:= name quantifier?;
+
+alternation_subsequent:= pipe sequence;

@@ -70,6 +70,7 @@ namespace UniversalParser
                 case MatchType.VALUE:
                     return MatchText == ToMatch.Value;
                 case MatchType.REGEX:
+                    // Regex must match on one character. Really useful only for character classes.
                     Regex charclass = new Regex(MatchText);
                     return charclass.Match(ToMatch.Value).Success;
                 case MatchType.EOF:
@@ -119,12 +120,11 @@ namespace UniversalParser
     {
         private ITokenStream Source;
         public Dictionary<String, GrammarNode> Productions;
-
+        public string tag;
         public Validator(ITokenStream Source, Dictionary<String, GrammarNode> Productions)
         {
             this.Source = Source;
             this.Productions = Productions;
-            this.SentEOF = false;
         }
 
         public bool EOF
@@ -135,16 +135,17 @@ namespace UniversalParser
             }
         }
 
-        private bool SentEOF;
-
         public TokenList GetProduction()
         {
             int StartPosition = Source.Position;
 
             foreach (KeyValuePair<String, GrammarNode> kvp in Productions)
             {
+                Console.WriteLine(tag + " trying to find " + kvp.Key);
                 if (AdvanceQuantified(kvp.Value))
                 {
+                    Console.WriteLine(tag + ":");
+                    Console.WriteLine(kvp.Value.GNTQuantifier.ToString() + " " + kvp.Key + " by " + kvp.Value.GNType.ToString() + " on " + kvp.Value.MatchOn.ToString());
                     return new TokenList(kvp.Key, Source.Range(StartPosition, Source.Position - StartPosition));
                 }
                 Source.Position = StartPosition;
@@ -155,7 +156,6 @@ namespace UniversalParser
 
         public bool AdvanceQuantified(GrammarNode Rule)
         {
-            //Console.WriteLine("Trying to find: " + Rule.GNTQuantifier.ToString() + " of " + Rule.MatchText + " by matching on " + Rule.MatchOn.ToString());
             switch (Rule.GNTQuantifier)
             {
                 case GrammarNodeTypeQuantifier.ONE:
@@ -334,14 +334,17 @@ namespace UniversalParser
         private int TokenPosition;
         private bool eof;
         private Dictionary<String, GrammarNode> Ignore;
-
+        private string tag;
         public Scanner(ITokenStream Code, Dictionary<String, GrammarNode> Productions, Dictionary<string, GrammarNode> Ignore)
         {
             CodeValidator = new Validator(Code, Productions);
+            tag = "Scanner";
+            CodeValidator.tag = this.tag;
             scanned = new List<Token>();
             TokenPosition = 0;
             eof = false;
             this.Ignore = Ignore;
+            
         }
 
         // Concatenate the valid token list--chars, really--into a token that the parser will understand.
@@ -464,8 +467,11 @@ namespace UniversalParser
         {
             target = (DiagnosticCompiler)Target;
             this.Checker = new Validator(SourceScanner, LanguageProductions);
+            tag = "Parser";
+            Checker.tag = this.tag;
+            
         }
-
+        private string tag;
         private DiagnosticCompiler target;
         public ICompiler Target
         {
@@ -525,20 +531,25 @@ namespace UniversalParser
         {
             this.outputpath = outputFile;
             this.ofile = new StreamWriter(this.outputpath);
+            //ofile.AutoFlush = true;
         }
         public void Build(TokenList Unit)
         {
             if (Unit.tag != "whitespace")
             {
+                //Console.WriteLine("BeginUnit: " + Unit.tag);
                 ofile.WriteLine("BeginUnit: " + Unit.tag);
                 foreach (Token t in Unit)
                 {
                     if (t.TokenType != "whitespace")
                     {
+                        //Console.WriteLine(t.TokenType + ": " + t.Value);
                         ofile.WriteLine(t.TokenType + ": " + t.Value);
+                        
                     }
                 }
                 ofile.WriteLine("EndUnit: " + Unit.tag);
+                //Console.WriteLine("EndUnit: " + Unit.tag);
                 ofile.Flush();
             }
         }
@@ -563,12 +574,244 @@ namespace UniversalParser
         }
 
     }
+
     [Serializable]
-    public class TestLanguage
+    public class Language
     {
         public Dictionary<string, GrammarNode> ScannerProductions;
         public Dictionary<string, GrammarNode> ParserProductions;
-        public Dictionary<String, GrammarNode> Ignore;
+        public Dictionary<string, GrammarNode> Ignore;
+
+        static protected GrammarNode ToSequence(string ToSequence,  GrammarNodeTypeQuantifier NumTimes)
+        {
+            if (ToSequence.Length == 1)
+            {
+                return new GrammarNode(GrammarNodeType.TERMINAL, ToSequence, MatchType.VALUE, NumTimes);
+            }
+
+            if (ToSequence.Length == 0)
+            {
+                throw new Exception("Cannot match zero-length string.");
+            }
+
+            GrammarNode ToReturn = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE, NumTimes);
+            for (int i = 0; i < ToSequence.Length; i++)
+            {
+                ToReturn.Add(new GrammarNode(GrammarNodeType.TERMINAL, ToSequence[i].ToString(), MatchType.VALUE));
+            }
+            return ToReturn;
+        }
+
+        static protected GrammarNode TerminalNodeByType(string MatchText)
+        {
+            return new GrammarNode(GrammarNodeType.TERMINAL, MatchText, MatchType.TYPE);
+        }
+
+        static protected GrammarNode SequenceNode()
+        {
+            return new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
+        }
+
+    }
+
+    
+    [Serializable]
+    public class EBNF : Language
+    {
+        public EBNF()
+        {
+
+            ScannerProductions = new Dictionary<string, GrammarNode>();
+
+            GrammarNode name = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
+            GrammarNode name_initial = new GrammarNode(GrammarNodeType.TERMINAL, "[a-z]", MatchType.REGEX);
+            GrammarNode name_subsequent = new GrammarNode(GrammarNodeType.TERMINAL, "[a-z0-9_]", MatchType.REGEX, GrammarNodeTypeQuantifier.ZERO_OR_MORE);
+
+            name.Add(name_initial);
+            name.Add(name_subsequent);
+            // TODO: Reserved words require lookahead for robust performance.
+            //GrammarNode environment_name = new GrammarNode(GrammarNodeType.ALTERNATION, "", MatchType.RECURSE);
+            //GrammarNode scanner_name = Language.ToSequence("scanner", GrammarNodeTypeQuantifier.ONE);
+            //GrammarNode parser_name = Language.ToSequence("parser", GrammarNodeTypeQuantifier.ONE);
+            //environment_name.Add(scanner_name);
+            //environment_name.Add(parser_name);
+            // On hold pending decision on and implementation of lookahead.
+            //GrammarNode ignore_production_name = ToSequence("ignore", GrammarNodeTypeQuantifier.ONE);
+
+           
+
+            GrammarNode assignment = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
+            GrammarNode colon = new GrammarNode(GrammarNodeType.TERMINAL, ":", MatchType.VALUE);
+            GrammarNode equal = new GrammarNode(GrammarNodeType.TERMINAL, "=", MatchType.VALUE);
+            assignment.Add(colon);
+            assignment.Add(equal);
+
+            GrammarNode whitespace = new GrammarNode(GrammarNodeType.TERMINAL, @"\s", MatchType.REGEX, GrammarNodeTypeQuantifier.ONE_OR_MORE);
+
+            // regex:= /\/([^\/]|(?<\\)\/)+\//;
+            GrammarNode regex = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
+            GrammarNode regex_initial = new GrammarNode(GrammarNodeType.TERMINAL, "/", MatchType.VALUE);
+            GrammarNode regex_terminal = new GrammarNode(GrammarNodeType.TERMINAL, "/", MatchType.VALUE);
+            GrammarNode regex_piece = new GrammarNode(GrammarNodeType.ALTERNATION, "", MatchType.RECURSE, GrammarNodeTypeQuantifier.ONE_OR_MORE);
+            GrammarNode not_slashes = new GrammarNode(GrammarNodeType.TERMINAL, @"[^\\/]", MatchType.REGEX, GrammarNodeTypeQuantifier.ONE);
+            GrammarNode escape = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE, GrammarNodeTypeQuantifier.ONE);
+            GrammarNode regex_backslash = new GrammarNode(GrammarNodeType.TERMINAL, @"\", MatchType.VALUE, GrammarNodeTypeQuantifier.ONE);
+            GrammarNode regex_thing_escaped = new GrammarNode(GrammarNodeType.TERMINAL, @"\S", MatchType.REGEX, GrammarNodeTypeQuantifier.ONE);
+
+            // assemble production 'regex'
+            regex.Add(regex_initial);
+            regex.Add(regex_piece);
+            regex.Add(regex_terminal);
+
+            // assemble label 'regex_piece'
+            regex_piece.Add(escape);
+            regex_piece.Add(not_slashes);
+            
+            // assemble label 'escape'
+            escape.Add(regex_backslash); // escape sequences start with a backslash...
+            escape.Add(regex_thing_escaped); // ...and are followed by the thing escaped.
+
+            GrammarNode terminator = new GrammarNode(GrammarNodeType.TERMINAL, ";", MatchType.VALUE);
+
+            GrammarNode ebnf_string = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
+            GrammarNode quote = new GrammarNode(GrammarNodeType.TERMINAL, "\"", MatchType.VALUE);
+            //string_element:= /[^\\"]/ | /\\\"/| /\\\\/;
+            GrammarNode string_element = new GrammarNode(GrammarNodeType.ALTERNATION, "", MatchType.RECURSE, GrammarNodeTypeQuantifier.ZERO_OR_MORE);
+            GrammarNode not_slash_or_quote = new GrammarNode(GrammarNodeType.TERMINAL, @"[^\\" + "\"]", MatchType.REGEX);
+            string_element.Add(not_slash_or_quote);
+            string_element.Add(escape);
+            ebnf_string.Add(quote);
+            ebnf_string.Add(string_element);
+            ebnf_string.Add(quote);
+
+            GrammarNode quantifier = new GrammarNode(GrammarNodeType.ALTERNATION, "", MatchType.RECURSE);
+            GrammarNode zero_or_one = new GrammarNode(GrammarNodeType.TERMINAL, "?", MatchType.VALUE);
+            GrammarNode zero_or_more = new GrammarNode(GrammarNodeType.TERMINAL, "*", MatchType.VALUE);
+            GrammarNode one_or_more = new GrammarNode(GrammarNodeType.TERMINAL, "+", MatchType.VALUE);
+            quantifier.Add(zero_or_more);
+            quantifier.Add(zero_or_one);
+            quantifier.Add(one_or_more);
+
+            GrammarNode comment = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
+            GrammarNode slash = new GrammarNode(GrammarNodeType.TERMINAL, "/", MatchType.VALUE);
+            comment.Add(slash);
+            comment.Add(slash);
+            GrammarNode not_newline = new GrammarNode(GrammarNodeType.TERMINAL, @"[^\n\r]", MatchType.REGEX, GrammarNodeTypeQuantifier.ZERO_OR_MORE);
+            comment.Add(not_newline);
+
+            GrammarNode pipe = new GrammarNode(GrammarNodeType.TERMINAL, "|", MatchType.VALUE);
+
+
+            GrammarNode language_name = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE, GrammarNodeTypeQuantifier.ONE);
+            GrammarNode language_sigil = new GrammarNode(GrammarNodeType.TERMINAL, "%", MatchType.VALUE, GrammarNodeTypeQuantifier.ONE);
+            GrammarNode Zor1whitespace = new GrammarNode(GrammarNodeType.ALTERNATION, "", MatchType.RECURSE, GrammarNodeTypeQuantifier.ZERO_OR_ONE);
+            Zor1whitespace.Add(whitespace);
+
+            GrammarNode mixed_name = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
+            GrammarNode mixed_initial = new GrammarNode(GrammarNodeType.TERMINAL, "[a-zA-Z]", MatchType.REGEX);
+            GrammarNode mixed_subsequent = new GrammarNode(GrammarNodeType.TERMINAL, "[a-zA-Z0-9_]", MatchType.REGEX, GrammarNodeTypeQuantifier.ZERO_OR_MORE);
+            
+            // assemble label 'mixed_name'
+            mixed_name.Add(mixed_initial);
+            mixed_name.Add(mixed_subsequent);
+
+            // assemble production 'language_name'
+            language_name.Add(language_sigil);
+            language_name.Add(language_sigil);
+            language_name.Add(Zor1whitespace);
+            language_name.Add(mixed_name);
+
+            GrammarNode environment_name = Language.SequenceNode();
+            environment_name.Add(language_sigil);
+            environment_name.Add(Zor1whitespace);
+            environment_name.Add(name);
+
+            GrammarNode eof = new GrammarNode(GrammarNodeType.TERMINAL, "EOF", MatchType.EOF);
+
+            //ScannerProductions.Add("ignore", ignore_production_name);
+            ScannerProductions.Add("environment_name", environment_name);
+            ScannerProductions.Add("name", name);
+            ScannerProductions.Add("assignment", assignment);
+            ScannerProductions.Add("whitespace", whitespace);
+            ScannerProductions.Add("regex", regex);
+            ScannerProductions.Add("terminator", terminator);
+            ScannerProductions.Add("string", ebnf_string);
+            ScannerProductions.Add("quantifier", quantifier);
+            ScannerProductions.Add("comment", comment);
+            ScannerProductions.Add("pipe", pipe);
+            ScannerProductions.Add("language_name", language_name);
+            ScannerProductions.Add("EOF", eof);
+            
+            // The scanner won't send these off to the parser.
+            this.Ignore = new Dictionary<string, GrammarNode>();
+            Ignore.Add("whitespace", whitespace);
+            Ignore.Add("comment", comment);
+
+            this.ParserProductions = new Dictionary<string, GrammarNode>();
+        
+            //language_specifier:= language_name;
+            GrammarNode P_language_spec = new GrammarNode(GrammarNodeType.TERMINAL, "language_name", MatchType.TYPE);
+
+            
+
+            GrammarNode P_environment_name = new GrammarNode(GrammarNodeType.TERMINAL, "environment_name", MatchType.TYPE);
+
+            //production:= production_name assignment sequence alternation_subsequent* terminator;
+            GrammarNode production = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
+            GrammarNode P_name = Language.TerminalNodeByType("name");
+            GrammarNode P_assignment = Language.TerminalNodeByType("assignment");
+            GrammarNode P_sequence = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
+            GrammarNode P_alternation_subsequent = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE, GrammarNodeTypeQuantifier.ZERO_OR_MORE);
+            GrammarNode P_terminator = new GrammarNode(GrammarNodeType.TERMINAL, "terminator", MatchType.TYPE);
+
+            // assemble production 'production'
+            production.Add(P_name);
+            production.Add(P_assignment);
+            production.Add(P_sequence);
+            production.Add(P_alternation_subsequent);
+            production.Add(P_terminator);
+
+            
+
+            //sequence:= sequence_atom+;
+            GrammarNode P_sequence_atom = new GrammarNode(GrammarNodeType.ALTERNATION, "", MatchType.RECURSE, GrammarNodeTypeQuantifier.ONE_OR_MORE);
+            P_sequence.Add(P_sequence_atom);
+
+            //sequence_atom:= quantified_name | quantified_string | regex;
+            GrammarNode P_quantified_name = Language.SequenceNode();
+            GrammarNode P_quantified_string = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
+            GrammarNode P_regex = Language.TerminalNodeByType("regex");
+            P_sequence_atom.Add(P_quantified_name);
+            P_sequence_atom.Add(P_quantified_string);
+            P_sequence_atom.Add(P_regex);
+
+            //quantified_name:= name quantifier?;
+            GrammarNode P_quantifier = Language.TerminalNodeByType("quantifier");
+            P_quantifier.GNTQuantifier = GrammarNodeTypeQuantifier.ZERO_OR_ONE;
+            P_quantified_name.Add(P_name);
+            P_quantified_name.Add(P_quantifier);
+
+            //quantified_string:= string quantifier?;
+            GrammarNode P_string = Language.TerminalNodeByType("string"); 
+            P_quantified_string.Add(P_string);
+            P_quantified_string.Add(P_quantifier);
+            
+            //alternation_subsequent:= pipe sequence;
+            GrammarNode P_pipe = Language.TerminalNodeByType("pipe");
+            P_alternation_subsequent.Add(P_pipe);
+            P_alternation_subsequent.Add(P_sequence);
+            
+
+            ParserProductions.Add("production", production); 
+            ParserProductions.Add("language_spec", P_language_spec);
+            ParserProductions.Add("environment_name", P_environment_name);
+            ParserProductions.Add("EOF", eof);
+        }
+    }
+
+    [Serializable]
+    public class TestLanguage : Language
+    {
 
         public TestLanguage()
         {
