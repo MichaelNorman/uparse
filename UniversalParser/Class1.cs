@@ -370,10 +370,6 @@ namespace UniversalParser
         // Don't ignore EOF and you should be fine.
         public Token ReadToken()
         {
-            while (Ignore.ContainsKey(this[TokenPosition].TokenType))
-            {
-                TokenPosition++;
-            }
             return this[TokenPosition++];
         }
 
@@ -391,7 +387,13 @@ namespace UniversalParser
                     }
                     else
                     {
-                        scanned.Add(Compile(CodeValidator.GetProduction()));
+                        // read until not ignored. add first not ignored to scanned.
+                        Token currentToken = Compile(CodeValidator.GetProduction());
+                        while (Ignore.ContainsKey(currentToken.TokenType))
+                        {
+                            currentToken = Compile(CodeValidator.GetProduction());
+                        }
+                        scanned.Add(currentToken);
                     }
                 }
                 if (scanned[i].IsEOF)
@@ -535,23 +537,21 @@ namespace UniversalParser
         }
         public void Build(TokenList Unit)
         {
-            if (Unit.tag != "whitespace")
+            
+            //Console.WriteLine("BeginUnit: " + Unit.tag);
+            ofile.WriteLine("BeginUnit: " + Unit.tag);
+            foreach (Token t in Unit)
             {
-                //Console.WriteLine("BeginUnit: " + Unit.tag);
-                ofile.WriteLine("BeginUnit: " + Unit.tag);
-                foreach (Token t in Unit)
-                {
-                    if (t.TokenType != "whitespace")
-                    {
-                        //Console.WriteLine(t.TokenType + ": " + t.Value);
-                        ofile.WriteLine(t.TokenType + ": " + t.Value);
-                        
-                    }
-                }
-                ofile.WriteLine("EndUnit: " + Unit.tag);
-                //Console.WriteLine("EndUnit: " + Unit.tag);
-                ofile.Flush();
+                
+                //Console.WriteLine(t.TokenType + ": " + t.Value);
+                ofile.WriteLine(t.TokenType + ": " + t.Value);
+                    
+                
             }
+            ofile.WriteLine("EndUnit: " + Unit.tag);
+            //Console.WriteLine("EndUnit: " + Unit.tag);
+            ofile.Flush();
+           
         }
         private StreamWriter ofile;
         private String outputpath;
@@ -573,6 +573,30 @@ namespace UniversalParser
             }
         }
 
+    }
+
+    public class ParserCompiler : ICompiler
+    {
+        #region ICompiler Members
+
+        public void Build(TokenList Unit)
+        {
+            throw new NotImplementedException();
+        }
+
+        public string OutputFile
+        {
+            get
+            {
+                throw new NotImplementedException();
+            }
+            set
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        #endregion
     }
 
     [Serializable]
@@ -728,7 +752,6 @@ namespace UniversalParser
 
             GrammarNode eof = new GrammarNode(GrammarNodeType.TERMINAL, "EOF", MatchType.EOF);
 
-            //ScannerProductions.Add("ignore", ignore_production_name);
             ScannerProductions.Add("environment_name", environment_name);
             ScannerProductions.Add("name", name);
             ScannerProductions.Add("assignment", assignment);

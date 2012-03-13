@@ -164,7 +164,6 @@ regex: /[a-zA-Z0-9_]/
 terminator: ;
 EndUnit: production
 BeginUnit: production
-comment: // The special name "ignore" causes the scanner to swallow these tokens.
 name: ignore
 assignment: :=
 name: comment
