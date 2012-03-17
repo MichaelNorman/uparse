@@ -1,6 +1,7 @@
 %% EBNF
 
 % scanner
+export:= environment_name | name | assignment | regex | terminator | string | quantifier | pipe | language_name | comment | whitespace;
 
 environment_name:= "scanner" | "parser";
 name:= name_initial name_subsequent*;
@@ -10,7 +11,7 @@ name_subsequent := /[a-z0-9_]/;
 assignment:= ":=";
 
 whitespace:= whitespace_char+;
-whitespace_char:= /\\s/;
+whitespace_char:= /\s/;
 
 regex:= regex_initial regex_piece+ regex_terminal;
 regex_piece:= /[^\\\/]/ | escape_sequence;
@@ -39,6 +40,8 @@ mixed_subsequent := /[a-zA-Z0-9_]/;
 ignore:= comment | whitespace;
 
 %parser
+
+export:= language_specifier | environment_specifier | production;
 
 language_specifier:= language_name;
 

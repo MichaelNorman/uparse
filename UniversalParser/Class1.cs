@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace UniversalParser
 {
@@ -80,6 +81,38 @@ namespace UniversalParser
             }
         }
 
+        #endregion
+
+        #region StaticMethods
+        public static GrammarNode ToSequence(string ToSequence, GrammarNodeTypeQuantifier NumTimes)
+        {
+            if (ToSequence.Length == 1)
+            {
+                return new GrammarNode(GrammarNodeType.TERMINAL, ToSequence, MatchType.VALUE, NumTimes);
+            }
+
+            if (ToSequence.Length == 0)
+            {
+                throw new Exception("Cannot match zero-length string.");
+            }
+
+            GrammarNode ToReturn = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE, NumTimes);
+            for (int i = 0; i < ToSequence.Length; i++)
+            {
+                ToReturn.Add(new GrammarNode(GrammarNodeType.TERMINAL, ToSequence[i].ToString(), MatchType.VALUE));
+            }
+            return ToReturn;
+        }
+
+        public static GrammarNode TerminalNodeByType(string MatchText)
+        {
+            return new GrammarNode(GrammarNodeType.TERMINAL, MatchText, MatchType.TYPE);
+        }
+
+        public static GrammarNode SequenceNode()
+        {
+            return new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
+        }
         #endregion
     }
     #endregion
@@ -333,9 +366,9 @@ namespace UniversalParser
         private List<Token> scanned;
         private int TokenPosition;
         private bool eof;
-        private Dictionary<String, GrammarNode> Ignore;
+        private Dictionary<String, string> Ignore;
         private string tag;
-        public Scanner(ITokenStream Code, Dictionary<String, GrammarNode> Productions, Dictionary<string, GrammarNode> Ignore)
+        public Scanner(ITokenStream Code, Dictionary<String, GrammarNode> Productions, Dictionary<string, string> Ignore)
         {
             CodeValidator = new Validator(Code, Productions);
             tag = "Scanner";
@@ -508,6 +541,7 @@ namespace UniversalParser
                 Target.Build(Checker.GetProduction());
                 if (Checker.EOF)
                 {
+                    Target.Build(Checker.GetProduction());
                     break;
                 }
             }
@@ -577,26 +611,184 @@ namespace UniversalParser
 
     public class ParserCompiler : ICompiler
     {
+        private Language LanguageToFill;
+        private Dictionary<string, GrammarNode> CurrentEnvironment;
+        private string CurrentEnvironmentName;
+        private Dictionary<string, bool> ScannerNames;
+        private Dictionary<string, bool> ParserNames;
+        private Dictionary<string, Dictionary<string, bool>> Names;
+        private Dictionary<string, Dictionary<string, GrammarNode>> ScannerDuplicates;
+        private Dictionary<string, Dictionary<string, GrammarNode>> ParserDuplicates;
+
+
+        public ParserCompiler()
+        {
+            LanguageToFill = new Language();
+            ScannerNames = new Dictionary<string, bool>();
+            ParserNames = new Dictionary<string, bool>();
+            Names = new Dictionary<string, Dictionary<string, bool>>();
+            Names.Add("scanner", ScannerNames);
+            Names.Add("parser", ParserNames);
+            ScannerDuplicates = new Dictionary<string, Dictionary<string, GrammarNode>>();
+            ParserDuplicates = new Dictionary<string, Dictionary<string, GrammarNode>>();
+
+        }
         #region ICompiler Members
 
         public void Build(TokenList Unit)
         {
-            throw new NotImplementedException();
+            Token Head = Unit[0];
+
+            if (Head.IsEOF)
+            {
+                Cleanup();
+                return;
+            }
+
+            switch (Head.TokenType)
+            {
+                case "language_specifier":
+                    LanguageToFill.LanguageName = Head.Value.Replace("%", "").Replace(" ", "");
+                    break;
+                case "environment_specifier":
+                    EnterEnvironment(Head.Value.Replace("%", "").Replace(" ", ""));
+                    break;
+                case "production":
+                    BuildProduction(Unit);
+                    break;
+                default:
+                    throw new Exception("Unrecognized syntax beginning with: " + Head.TokenType);
+            }
         }
+
+        private string ofile;
 
         public string OutputFile
         {
             get
             {
-                throw new NotImplementedException();
+                return ofile;
             }
             set
             {
-                throw new NotImplementedException();
+               ofile = value;
             }
         }
 
         #endregion
+
+        private bool InParserEnvironment()
+        {
+            return CurrentEnvironment == LanguageToFill.ParserProductions;
+        }
+
+        private void EnterEnvironment(string CompilerEnvironment)
+        {
+            switch (CompilerEnvironment)
+            {
+                case "scanner":
+                    CurrentEnvironment = LanguageToFill.ScannerProductions;
+                    break;
+                case "parser":
+                    CurrentEnvironment = LanguageToFill.ParserProductions;
+                    break;
+                default:
+                    throw new Exception("Unrecognized compiler environment: " + CompilerEnvironment);
+            }
+            CurrentEnvironmentName = CompilerEnvironment;
+        }
+        
+        private void BuildProduction(TokenList Unit)
+        {
+            Token Head = Unit[0];
+            GrammarNode Top = CurrentEnvironment[Head.Value] = new GrammarNode(GrammarNodeType.ALTERNATION, "", MatchType.RECURSE);
+            int i = 2; // The third token is the first name.
+
+            while (i < Unit.Count - 1) // Don't try to build the terminator.
+            {
+                Top.Add(FillSequence(ref i, Unit));
+            }
+        }
+
+        private void ModifyQuantifier(GrammarNode Sequence, Token CorrespondingToken, GrammarNodeTypeQuantifier NumTimes)
+        {
+            if (CorrespondingToken.TokenType == "name")
+            {
+
+            }
+            else
+            {
+                Sequence[Sequence.Count - 1].GNTQuantifier = NumTimes;
+            }
+        }
+
+        private GrammarNode FillSequence(ref int i, TokenList Unit)
+        {
+            Token CurrentToken = Unit[i];
+            Token PreviousToken = null;
+            GrammarNode Sequence = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
+            GrammarNode CurrentGN = null;
+            GrammarNode PreviousGN = null;
+            while (CurrentToken.TokenType != "pipe" && !CurrentToken.IsEOF)
+            {
+                switch (CurrentToken.TokenType)
+                {
+                    case "name":
+                        if (!Built(CurrentToken.Value))
+                        {
+                            CurrentGN = CurrentEnvironment[CurrentToken.Value] = new GrammarNode(GrammarNodeType.ALTERNATION, "", MatchType.RECURSE);
+                        }
+                        Sequence.Add(CurrentEnvironment[CurrentToken.Value]);
+                        PreviousGN = CurrentGN;
+                        break;
+                    case "string":
+                        CurrentGN = GrammarNode.ToSequence(CurrentToken.Value, GrammarNodeTypeQuantifier.ONE);
+                        Sequence.Add(CurrentGN);
+                        PreviousGN = CurrentGN;
+                        break;
+                    case "regex":
+                        string regex = CurrentToken.Value.Substring(1).Substring(CurrentToken.Value.Length - 2);
+                        CurrentGN = new GrammarNode(GrammarNodeType.TERMINAL, regex, MatchType.REGEX);
+                        PreviousGN = CurrentGN;
+                        break;
+                    case "quantifier":
+                        switch (CurrentToken.Value)
+                        {
+                            case "+":
+                                ModifyQuantifier(Sequence, PreviousToken, GrammarNodeTypeQuantifier.ONE_OR_MORE);
+                                break;
+                            case "*":
+                                ModifyQuantifier(Sequence, PreviousToken, GrammarNodeTypeQuantifier.ZERO_OR_MORE);
+                                break;
+                            case "?":
+                                ModifyQuantifier(Sequence, PreviousToken, GrammarNodeTypeQuantifier.ZERO_OR_ONE);
+                                break;
+                            default:
+                                throw new Exception("Unrecognized quantifier: " + CurrentToken.Value);
+                        }
+                        break;
+
+                    default:
+                        throw new Exception("Unrecognized sequence atom. Type: " + CurrentToken.TokenType + " Value: " + CurrentToken.Value);
+                }
+                
+                PreviousToken = CurrentToken;
+                i++;
+                CurrentToken = Unit[i];
+            }
+
+            i++; // Set us up on either the start of the next sequence or off the end.
+            return Sequence;
+        }
+
+        private bool Built(string Name)
+        {
+            return false;
+        }
+
+        private void Cleanup()
+        {
+        }
     }
 
     [Serializable]
@@ -604,37 +796,9 @@ namespace UniversalParser
     {
         public Dictionary<string, GrammarNode> ScannerProductions;
         public Dictionary<string, GrammarNode> ParserProductions;
-        public Dictionary<string, GrammarNode> Ignore;
-
-        static protected GrammarNode ToSequence(string ToSequence,  GrammarNodeTypeQuantifier NumTimes)
-        {
-            if (ToSequence.Length == 1)
-            {
-                return new GrammarNode(GrammarNodeType.TERMINAL, ToSequence, MatchType.VALUE, NumTimes);
-            }
-
-            if (ToSequence.Length == 0)
-            {
-                throw new Exception("Cannot match zero-length string.");
-            }
-
-            GrammarNode ToReturn = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE, NumTimes);
-            for (int i = 0; i < ToSequence.Length; i++)
-            {
-                ToReturn.Add(new GrammarNode(GrammarNodeType.TERMINAL, ToSequence[i].ToString(), MatchType.VALUE));
-            }
-            return ToReturn;
-        }
-
-        static protected GrammarNode TerminalNodeByType(string MatchText)
-        {
-            return new GrammarNode(GrammarNodeType.TERMINAL, MatchText, MatchType.TYPE);
-        }
-
-        static protected GrammarNode SequenceNode()
-        {
-            return new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
-        }
+        public Dictionary<string, string> Ignore;
+        public string LanguageName;
+       
 
     }
 
@@ -644,7 +808,7 @@ namespace UniversalParser
     {
         public EBNF()
         {
-
+            LanguageName = "EBNF";
             ScannerProductions = new Dictionary<string, GrammarNode>();
 
             GrammarNode name = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
@@ -745,7 +909,7 @@ namespace UniversalParser
             language_name.Add(Zor1whitespace);
             language_name.Add(mixed_name);
 
-            GrammarNode environment_name = Language.SequenceNode();
+            GrammarNode environment_name = GrammarNode.SequenceNode();
             environment_name.Add(language_sigil);
             environment_name.Add(Zor1whitespace);
             environment_name.Add(name);
@@ -766,9 +930,9 @@ namespace UniversalParser
             ScannerProductions.Add("EOF", eof);
             
             // The scanner won't send these off to the parser.
-            this.Ignore = new Dictionary<string, GrammarNode>();
-            Ignore.Add("whitespace", whitespace);
-            Ignore.Add("comment", comment);
+            this.Ignore = new Dictionary<string, string>();
+            Ignore.Add("whitespace", "whitespace");
+            Ignore.Add("comment", "comment");
 
             this.ParserProductions = new Dictionary<string, GrammarNode>();
         
@@ -781,8 +945,8 @@ namespace UniversalParser
 
             //production:= production_name assignment sequence alternation_subsequent* terminator;
             GrammarNode production = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
-            GrammarNode P_name = Language.TerminalNodeByType("name");
-            GrammarNode P_assignment = Language.TerminalNodeByType("assignment");
+            GrammarNode P_name = GrammarNode.TerminalNodeByType("name");
+            GrammarNode P_assignment = GrammarNode.TerminalNodeByType("assignment");
             GrammarNode P_sequence = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
             GrammarNode P_alternation_subsequent = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE, GrammarNodeTypeQuantifier.ZERO_OR_MORE);
             GrammarNode P_terminator = new GrammarNode(GrammarNodeType.TERMINAL, "terminator", MatchType.TYPE);
@@ -801,26 +965,26 @@ namespace UniversalParser
             P_sequence.Add(P_sequence_atom);
 
             //sequence_atom:= quantified_name | quantified_string | regex;
-            GrammarNode P_quantified_name = Language.SequenceNode();
+            GrammarNode P_quantified_name = GrammarNode.SequenceNode();
             GrammarNode P_quantified_string = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
-            GrammarNode P_regex = Language.TerminalNodeByType("regex");
+            GrammarNode P_regex = GrammarNode.TerminalNodeByType("regex");
             P_sequence_atom.Add(P_quantified_name);
             P_sequence_atom.Add(P_quantified_string);
             P_sequence_atom.Add(P_regex);
 
             //quantified_name:= name quantifier?;
-            GrammarNode P_quantifier = Language.TerminalNodeByType("quantifier");
+            GrammarNode P_quantifier = GrammarNode.TerminalNodeByType("quantifier");
             P_quantifier.GNTQuantifier = GrammarNodeTypeQuantifier.ZERO_OR_ONE;
             P_quantified_name.Add(P_name);
             P_quantified_name.Add(P_quantifier);
 
             //quantified_string:= string quantifier?;
-            GrammarNode P_string = Language.TerminalNodeByType("string"); 
+            GrammarNode P_string = GrammarNode.TerminalNodeByType("string"); 
             P_quantified_string.Add(P_string);
             P_quantified_string.Add(P_quantifier);
             
             //alternation_subsequent:= pipe sequence;
-            GrammarNode P_pipe = Language.TerminalNodeByType("pipe");
+            GrammarNode P_pipe = GrammarNode.TerminalNodeByType("pipe");
             P_alternation_subsequent.Add(P_pipe);
             P_alternation_subsequent.Add(P_sequence);
             
@@ -838,6 +1002,7 @@ namespace UniversalParser
 
         public TestLanguage()
         {
+            this.LanguageName = "Lispish";
             // The scanner will understand tokens in the sentence "(one foo baz   )", for example.
             // Incidentally, it will also understand them in "())( zab (((()", but that's not the scanner's problem.
             ScannerProductions = new Dictionary<string, GrammarNode>();
@@ -932,9 +1097,9 @@ namespace UniversalParser
             ParserProductions.Add("EOF", EOF);
 
             // The scanner will suppress whitespace, which will simplify parsing.
-            Ignore = new Dictionary<string, GrammarNode>();
+            Ignore = new Dictionary<string, string>();
 
-            Ignore.Add("whitespace", SPWhiteSpace); // It's only the key that matters.
+            Ignore.Add("whitespace", "whitespace"); // It's only the key that matters.
 
 
         }
