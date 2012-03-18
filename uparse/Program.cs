@@ -25,8 +25,8 @@ namespace uparse
             //Stream ebnf_persistence_file_stream = File.OpenRead(@"..\..\..\Samples\ebnf_persist");
             //BinaryFormatter bf = new BinaryFormatter();
             //TestLanguage my_tl = (TestLanguage)bf.Deserialize(TestLanguageStream);
-            Scanner SourceScanner = new Scanner(code_tokens, ebnf.ScannerProductions, ebnf.Ignore);
-            Parser EBNFLanguageParser = new Parser(new DiagnosticCompiler(OutputFile), SourceScanner, ebnf.ParserProductions);
+            Scanner SourceScanner = new Scanner(code_tokens, ebnf.ScannerNames,ebnf.ScannerProductions, ebnf.Ignore);
+            Parser EBNFLanguageParser = new Parser(new DiagnosticCompiler(OutputFile), SourceScanner, ebnf.ParserNames, ebnf.ParserProductions);
             //TestLanguageStream.Close();
 
             EBNFLanguageParser.Parse();
