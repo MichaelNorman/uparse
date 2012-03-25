@@ -236,8 +236,8 @@ namespace UniversalParser
 
 
             AddProduction("parser", "production", production);
-            AddProduction("parser", "language_spec", P_language_spec);
-            AddProduction("parser", "environment_name", P_environment_name);
+            AddProduction("parser", "language_specifier", P_language_spec);
+            AddProduction("parser", "environment_specifier", P_environment_name);
             AddProduction("parser", "EOF", eof);
         }
     }

@@ -3,7 +3,8 @@
 % scanner
 export:= environment_name | name | assignment | regex | terminator | string | quantifier | pipe | language_name | comment | whitespace;
 
-environment_name:= "scanner" | "parser";
+environment_name:= "%" whitespace? environment;
+environment:= "scanner" | "parser";
 name:= name_initial name_subsequent*;
 name_initial:=/[a-z]/;
 name_subsequent := /[a-z0-9_]/;
@@ -14,7 +15,9 @@ whitespace:= whitespace_char+;
 whitespace_char:= /\s/;
 
 regex:= regex_initial regex_piece+ regex_terminal;
+regex_initial:= "/";
 regex_piece:= /[^\\\/]/ | escape_sequence;
+regex_terminal:= "/";
 escape_sequence:= "\\" /./;
 
 terminator:= ";";
@@ -30,7 +33,7 @@ non_newline:= /[^\n]/;
 
 pipe:= "|";
 
-language_name:= "%" whitespace? mixed_case_name;
+language_name:= "%%" whitespace? mixed_case_name;
 mixed_case_name:= mixed_initial mixed_subsequent*;
 mixed_initial := /[a-zA-Z]/;
 mixed_subsequent := /[a-zA-Z0-9_]/;
@@ -49,7 +52,7 @@ environment_specifier:= environment_name;
 
 production:= production_name assignment sequence alternation_subsequent* terminator;
 
-production_name:= ignore_name | name;
+production_name:= name;
 
 sequence:= sequence_atom+;
 
@@ -59,3 +62,5 @@ quantified_string:= string quantifier?;
 quantified_name:= name quantifier?;
 
 alternation_subsequent:= pipe sequence;
+
+

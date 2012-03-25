@@ -84,8 +84,10 @@ namespace UniversalParser
         #endregion
 
         #region StaticMethods
+       
         public static GrammarNode ToSequence(string ToSequence, GrammarNodeTypeQuantifier NumTimes)
         {
+            
             if (ToSequence.Length == 1)
             {
                 return new GrammarNode(GrammarNodeType.TERMINAL, ToSequence, MatchType.VALUE, NumTimes);
@@ -124,6 +126,11 @@ namespace UniversalParser
                 Copy.Add(gn);
             }
             return Copy;
+        }
+
+        internal static GrammarNode EOFNode()
+        {
+            return new GrammarNode(GrammarNodeType.TERMINAL, "EOF", MatchType.EOF);
         }
     }
     #endregion
@@ -382,6 +389,7 @@ namespace UniversalParser
         private bool eof;
         private Dictionary<String, string> Ignore;
         private string tag;
+
         public Scanner(ITokenStream Code, List<string> Names, Dictionary<String, GrammarNode> Productions, Dictionary<string, string> Ignore)
         {
             CodeValidator = new Validator(Code, Names, Productions);
@@ -391,7 +399,6 @@ namespace UniversalParser
             TokenPosition = 0;
             eof = false;
             this.Ignore = Ignore;
-            
         }
 
         // Concatenate the valid token list--chars, really--into a token that the parser will understand.
@@ -412,6 +419,7 @@ namespace UniversalParser
             return new Token(taggedChars.tag, lexeme.ToString());
         }
 
+        
         #region ITokenStream Members
 
         // Don't ignore EOF and you should be fine.
@@ -462,7 +470,7 @@ namespace UniversalParser
             set
             {
                 TokenPosition = value;
-                if (TokenPosition >= scanned.Count - 1 && scanned[scanned.Count - 1].IsEOF)
+                if (TokenPosition >= scanned.Count - 1 && scanned.Count >= 1 && scanned[scanned.Count - 1].IsEOF)
                 {
                     eof = true;
                 }
@@ -555,7 +563,7 @@ namespace UniversalParser
                 Target.Build(Checker.GetProduction());
                 if (Checker.EOF)
                 {
-                    Target.Build(Checker.GetProduction());
+                    //Target.Build(Checker.GetProduction());
                     break;
                 }
             }
@@ -623,6 +631,8 @@ namespace UniversalParser
 
     }
 
+    //TODO: There's a ton of extranneous nesting going on, over and beyond just having a non-optimal compilation.
+
     public class ParserCompiler : ICompiler
     {
         private List<string> ScannerNames;
@@ -665,10 +675,10 @@ namespace UniversalParser
                 case "production":
                     BuildProduction(Unit);
                     break;
-                case "language_spec":
+                case "language_specifier":
                     LanguageName = Unit[0].Value.Replace("%", "").Replace(" ", "");
                     break;
-                case "environment_name":
+                case "environment_specifier":
                     EnterEnvironment(Unit[0].Value.Replace("%", "").Replace(" ", ""));
                     break;
                 case "EOF":
@@ -678,6 +688,7 @@ namespace UniversalParser
                     throw new Exception("Unexpected construct: " + Unit.tag);
             }
         }
+
         private void BuildProduction(TokenList Production)
         {
             Console.WriteLine("Building " + Production.tag + ", starting with " + Production[0].Value);
@@ -721,6 +732,7 @@ namespace UniversalParser
         private void AddSequence(GrammarNode Template, TokenList Production, ref int Location)
         {
             GrammarNode Sequence = new GrammarNode(GrammarNodeType.SEQUENCE, "", MatchType.RECURSE);
+            Template.Add(Sequence);
             Token CurrentToken = Production[Location];
             Console.WriteLine("Adding sequence...");
             //Console.ReadKey();
@@ -731,10 +743,17 @@ namespace UniversalParser
                 switch (CurrentToken.TokenType)
                 {
                     case "name":
-                        Sequence.Add(InstanceForInstanceName(CurrentToken.Value));
+                        if ("parser" == CurrentEnvironment && ScannerNames.Contains(CurrentToken.Value))
+                        {
+                            Sequence.Add(GrammarNode.TerminalNodeByType(CurrentToken.Value));
+                        }
+                        else
+                        {
+                            Sequence.Add(InstanceForInstanceName(CurrentToken.Value));
+                        }
                         break;
                     case "string":
-                        Sequence.Add(GrammarNode.ToSequence(CurrentToken.Value, GrammarNodeTypeQuantifier.ONE));
+                        Sequence.Add(GrammarNode.ToSequence(StringConverter.UnEscape(StringConverter.StringContents(CurrentToken.Value)), GrammarNodeTypeQuantifier.ONE));
                         break;
                     case "regex":
                         Sequence.Add(
@@ -764,8 +783,11 @@ namespace UniversalParser
                 Location++;
                 CurrentToken = Production[Location];
             }
-            Location++; // skip the damn pipes and walk off the terminator
+            Location++; // skip the pipes and walk off the terminator
         }
+
+        
+        // Handle "export" and "ignore" productions, which are simple alternations.
 
         private void FillNames(TokenList SpecialProduction, string IgnoreOrExport)
         {
@@ -795,7 +817,7 @@ namespace UniversalParser
                             break;
                         default:
                             throw new Exception("Impossibly unrecognized parser component: " + CurrentEnvironment);
-                            break;
+                            
                     }
 
                     for (int i = 2; i < SpecialProduction.Count - 1; i += 2)
@@ -850,8 +872,10 @@ namespace UniversalParser
                 }
                 CurrentInstances[InstanceName].Add(Instance);
             }
-            else // The instance list could be in the scanner environment. Strictly, it should appear in the "exports:=..." production.
+            else 
             {
+                // TODO: This code should no longer be exercised. It should be preempted
+                //       by an upstream check that inserts a token for the production name.
                 Dictionary<string, List<GrammarNode>> ScannerInstances = Instances["scanner"];
                 if (!CurrentInstances.ContainsKey(InstanceName) && !ScannerInstances.ContainsKey(InstanceName))
                 {
@@ -876,38 +900,157 @@ namespace UniversalParser
             // All we have to do is add the children of each template to every instance, since the instances already have
             // updated quantifier info.
 
-            // TODO: Find out why export and ignore make it into templates. Also, switch order since not
-            //       every template will have an instance. Namely, exported names can have only their templates.
-            foreach (KeyValuePair<string, Dictionary<string, GrammarNode>> EnvironmentTemplates in this.Templates)
+            foreach (KeyValuePair<string, Dictionary<string, List<GrammarNode>>> NamedInstanceListDict in Instances)
             {
-                foreach(KeyValuePair<string, GrammarNode> Template in EnvironmentTemplates.Value)
+                foreach (KeyValuePair<string, List<GrammarNode>> NamedInstanceList in NamedInstanceListDict.Value)
                 {
-                    foreach (GrammarNode Instance in Instances[EnvironmentTemplates.Key][Template.Key])
+                    foreach (GrammarNode Instance in NamedInstanceList.Value)
                     {
-                        Instance.AddRange(Template.Value.ToList());
+                        if (Templates["scanner"].ContainsKey(NamedInstanceList.Key))
+                        {
+                            FillInstanceFromTemplate(Instance, Templates["scanner"][NamedInstanceList.Key]);
+                        }
+                        else if (Templates["parser"].ContainsKey(NamedInstanceList.Key))
+                        {
+                            FillInstanceFromTemplate(Instance, Templates["parser"][NamedInstanceList.Key]);
+                        }
+                        else
+                        {
+                            throw new Exception("Instance \"" + NamedInstanceList.Key + "\" has no template.");
+                        }
                     }
                 }
             }
+            Console.WriteLine("Copied templates out...");
+        }
+
+        private void FillInstanceFromTemplate(GrammarNode Instance, GrammarNode Template)
+        {
+            Instance.AddRange(Template.ToList());
+        }
+
+        private void Persist()
+        {
+            Language ToPersist = new Language();
+            ToPersist.Ignore = this.Ignore;
+            ToPersist.LanguageName = this.LanguageName;
+            ToPersist.ScannerNames = this.ScannerNames;
+            ToPersist.ScannerProductions = this.ScannerProductions;
+            ToPersist.ParserNames = this.ParserNames;
+            ToPersist.ParserProductions = this.ParserProductions;
+
+            Stream PersistenceStream = File.Create(OutputFile);
+            BinaryFormatter bf = new BinaryFormatter();
+            bf.Serialize(PersistenceStream, ToPersist);
+            PersistenceStream.Flush();
+            PersistenceStream.Close();
         }
 
         private void CleanUp()
         {
-            //TODO: CopyTemplatesToInstances();
+            if (!ScannerProductions.ContainsKey("EOF"))
+            {
+                ScannerProductions.Add("EOF", GrammarNode.EOFNode());
+            }
+
+            if (!ParserProductions.ContainsKey("EOF"))
+            {
+                ParserProductions.Add("EOF", GrammarNode.EOFNode());
+            }
+
+            if (!ScannerNames.Contains("EOF"))
+            {
+                ScannerNames.Add("EOF");
+            }
+            CopyTemplatesToInstances();
+            Persist();
         }
 
         public string OutputFile
         {
             get
             {
-                throw new NotImplementedException();
+                return ofile;
             }
             set
             {
-                throw new NotImplementedException();
+                ofile = value;
             }
         }
-
         #endregion
+    }
+
+    public class StringConverter
+    {
+        public static string StringContents(string QuotedString)
+        {
+            return Regex.Replace(QuotedString, "^\"|\"$", "");
+        }
+
+        public static string UnEscape(string HasEscapes)
+        {
+            StringBuilder Cleansed = new StringBuilder("");
+
+            for (int i = 0; i < HasEscapes.Length; i++)
+            {
+                switch (HasEscapes[i])
+                {
+                    case '\\':
+                        Cleansed.Append(ConsumeEscape(ref i, HasEscapes));
+                        break;
+                    default:
+                        Cleansed.Append(HasEscapes[i]);
+                        break;
+                }
+            }
+
+            
+            return Cleansed.ToString();
+        }
+
+        private static string ConsumeEscape(ref int i, string HasEscapes)
+        {
+            i++;
+            switch (HasEscapes[i])
+            {
+                case 'u':
+                    string Escaped = HasEscapes.Substring(i + 1, 4);
+                    i += 5;
+                    return Escaped;
+                case '\\':
+                    i++;
+                    return "\\";
+                case '"':
+                    i++;
+                    return "\"";
+                case '0':
+                    i++;
+                    return "\0";
+                case 'a':
+                    i++;
+                    return "\a";
+                case 'b':
+                    i++;
+                    return "\b";
+                case 'f':
+                    i++;
+                    return "\f";
+                case 'n':
+                    i++;
+                    return "\n";
+                case 'r':
+                    i++;
+                    return "\r";
+                case 't':
+                    i++;
+                    return "\t";
+                case 'v':
+                    return "\v";
+                default:
+                    throw new Exception("Unrecognized escape sequence \"\\" + HasEscapes[i].ToString() + "\"");
+            }
+
+        }
     }
     
 }

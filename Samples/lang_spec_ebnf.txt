@@ -1,0 +1,20 @@
+%% LANGSPEC
+
+% scanner
+
+export:= lang_name;
+
+whitespace_char:= /\s/;
+whitespace:= whitespace_char+;
+
+lang_sigil:= "%%";
+name:= name_initial name_subsequent*;
+name_initial:= /[a-zA-Z]/;
+name_subsequent:= name_initial | /[0-9_]/;
+
+lang_name:= lang_sigil whitespace? name;
+
+%parser
+
+export:= lang_spec;
+lang_spec:=lang_name;
