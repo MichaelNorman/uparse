@@ -63,4 +63,6 @@ quantified_name:= name quantifier?;
 
 alternation_subsequent:= pipe sequence;
 
+fake:= "test";
+
 

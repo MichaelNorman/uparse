@@ -58,7 +58,40 @@ namespace UniversalParser
             this.GNTQuantifier = Quantity;
         }
 
+        public void Become(GrammarNode Target)
+        {
 
+            if (GrammarNodeTypeQuantifier.ONE == this.GNTQuantifier)
+            {
+                this.GNTQuantifier = Target.GNTQuantifier;
+            }
+            else if (GrammarNodeTypeQuantifier.ONE == Target.GNTQuantifier)
+            {
+                // NO-OP. Keep existing value.
+            }
+            else if (GrammarNodeTypeQuantifier.ZERO_OR_MORE == Target.GNTQuantifier || GrammarNodeTypeQuantifier.ZERO_OR_MORE == this.GNTQuantifier)
+            {
+                this.GNTQuantifier = GrammarNodeTypeQuantifier.ZERO_OR_MORE;
+            }
+            else if (Target.GNTQuantifier == Target.GNTQuantifier)
+            {
+                // NO-OP again.
+            }
+            else
+            {
+                this.GNTQuantifier = GrammarNodeTypeQuantifier.ZERO_OR_MORE;
+            }
+            this.GNType = Target.GNType;
+            this.MatchOn = Target.MatchOn;
+            this.MatchText = Target.MatchText;
+
+            this.RemoveRange(0, this.Count);
+
+            foreach (GrammarNode gn in Target)
+            {
+                this.Add(gn);
+            }
+        }
 
         #region IMatchable Members
 
@@ -567,6 +600,7 @@ namespace UniversalParser
                     break;
                 }
             }
+            this.Target.CleanUp();
         }
 
     }
@@ -580,6 +614,7 @@ namespace UniversalParser
             get;
             set;
         }
+        void CleanUp();
     }
 
 
@@ -628,6 +663,10 @@ namespace UniversalParser
                 ofile = new StreamWriter(outputpath);
             }
         }
+        public void CleanUp()
+        {
+            return;
+        }
 
     }
 
@@ -667,6 +706,13 @@ namespace UniversalParser
         private string ofile;
         
         #region ICompiler Members
+        public void CleanUp()
+        {
+            AppendEOFNodes();
+            CopyTemplatesToInstances();
+            Optimize();
+            Persist();
+        }
 
         public void Build(TokenList Unit)
         {
@@ -946,7 +992,46 @@ namespace UniversalParser
             PersistenceStream.Close();
         }
 
-        private void CleanUp()
+        
+
+        private void Optimize()
+        {
+            Compact(ScannerProductions);
+            Compact(ParserProductions);
+            return;
+        }
+
+        private void Compact(Dictionary<string, GrammarNode> Productions)
+        {
+            foreach (KeyValuePair<string, GrammarNode> ToCompact in Productions)
+            {
+                CompactProduction(ToCompact.Value);
+            }
+        }
+
+        private void CompactProduction(GrammarNode ToCompact)
+        {
+            foreach (GrammarNode child in ToCompact)
+            {
+                CompactProduction(child);
+            }
+
+            // If we have no children, or more than one child, everything is fine. Having no
+            // children means we're a terminal of some kind, and having multiple children
+            // means we're a non-trivial alternation or sequence. So, the only NO-OP is the
+            // trivial case, where we have one child. In that case, we need to become the child
+            // and adopt its children.
+            if (1 == ToCompact.Count)
+            {
+                // Become the child.
+                GrammarNode Target = ToCompact[0];
+                ToCompact.Become(Target);
+
+            }
+            return;
+        }
+
+        private void AppendEOFNodes()
         {
             if (!ScannerProductions.ContainsKey("EOF"))
             {
@@ -962,8 +1047,6 @@ namespace UniversalParser
             {
                 ScannerNames.Add("EOF");
             }
-            CopyTemplatesToInstances();
-            Persist();
         }
 
         public string OutputFile

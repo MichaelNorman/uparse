@@ -13,12 +13,12 @@ namespace uparse
         static void Main(string[] args)
         {
             CodeStream code_tokens = new CodeStream(File.OpenText(@"..\..\..\Samples\ebnf_ebnf.txt").ReadToEnd());
-            EBNF ebnf = new EBNF();
-           /* Stream ebnfStream = File.OpenRead(@"..\..\..\Samples\compiled_ebnf.persist");
+            //EBNF ebnf = new EBNF();
+            Stream ebnfStream = File.OpenRead(@"..\..\..\Samples\compiled_ebnf.persist");
             BinaryFormatter BFReader = new BinaryFormatter();
             Language ebnf = (Language)BFReader.Deserialize(ebnfStream);
             ebnfStream.Flush();
-            ebnfStream.Close();*/
+            ebnfStream.Close();
 
             Scanner SourceScanner = new Scanner(code_tokens, ebnf.ScannerNames, ebnf.ScannerProductions, ebnf.Ignore);
             Parser EBNFLanguageParser = new Parser(new ParserCompiler(@"..\..\..\Samples\compiled_ebnf.persist"),
