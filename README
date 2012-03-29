@@ -1,22 +1,53 @@
 This is a universal parser generator that walks a syntax tree while parsing a
-file. It currently parses a crummy tiny lisp using the handmade data structures
-at the bottom of the file.
+file. It has a compiler that enables you to build a syntax tree to parse any
+context-free grammar that you can specify in EBNF. Conveniently, the EBNF
+dialect it uses is specified in a file called ebnf_ebnf.txt in the 
+../Samples/ subfolder. This file specifies the dialect of
+EBNF in which it is actually written. You can use it as a guide and as a
+reference example!
 
-The projec currently consists of a dll project, a driver app, and a Samples
-directory. not to mention a test application. I may even go all out and add a
-GUI with a universal REPL whose default action is to spit your tokens back at
-you.
+To build and run the project, pull it down to your machine, and open the
+../UniversalParser/UniveralParser.csproj file in VS 2008. Pressing F5 results
+in a stream of diagnostic messages scrolling by, indicating vagaries about
+which productions are being built. When it's finished, open the Samples directory
+to find a newly updated compiled_ebnf.persist file that contains a new version
+of the tree used to parse EBNF. This was built from the ebnf_ebnf.txt file
+mentioned earlier.
 
-After or concurrently with that move/merge, I'll be hand crafting a syntax tree
-for a dialect of EBNF and adding serialization/deserialization to syntax trees. 
-After that, a compiler to turn the output of parsed EBNF into a syntax tree. Et,
-voila! You can parse any context-free grammar.
+Here are the steps the code goes through to parse and build a syntax tree:
+1) Program.main() in /uparse/Program.cs is the entry point. Execution starts
+   here with the slurping of ebnf_ebnf.txt into a CodeStream object. A
+   CodeStream produces a notional stream of tokens from a string by wrapping
+   each character in a token in which both the value and token type are the
+   character itself. ("b" becomes a Token such that Token.TokenType = "b" and
+   Token.Value = "b"." This allows the same loop that does the parsing to also
+   do the scanning, since that loop operates on tokens.
+2) Depending on which lines you comment out, Program.cs either creates a new
+   EBNF, which derives from Language, or deserializes a Language from the
+   compiled_ebnf.persist file mentioned earlier.
+3) No matter the case in (2), the code then calls Parse() on the EBNF or
+   Parser created.
+4) Parse() simply calls Compiler.Build() for each valid production it
+   encounters in the file until the EOF is encountered, then calls
+   Compiler.CleanUp(). CleanUp() does some tidying on the compiled tree, copying
+   out GrammarNodes trees to placeholder nodes, compacting the tree, and serializing
+   the Language to compiled_ebnf.persist (or whatever file you specify!).
+
+Under the hood, a language is essentially two syntax trees, composed of GrammarNodes,
+and 3 lists. These lists are: ScannerNames, the list of names provided after the
+"export" keyword in the scanner; ParserNames, likewise for the parser; and Ignore, a
+list of tokens that the scanner will recognize but skip when asked for the next
+token by the parser. **The parser can only see scanner productions that are in the
+scanners export list, and the compiler can only see parser productions that are in
+the parser's ignore list.**
 
 The impetus behind this project is that I had the realization that if you
 tokenize the source code, the very same engine that does the scanning 
 (tokenizing) can do the parsing (grammar checking), combined with the 
 realization that a parser generator shouldn't generate code, but rather syntax
- trees.
+trees. I'm sure this isn't original, since parsing is a very mature field within
+computer science, but it was a fun realization and a fairly challenging project
+with which to keep my C# skills in focus!
 
 ISSUES:
 --No error messages. Good luck figuring out why your parser blew up. Adding 
@@ -27,15 +58,6 @@ priority.
 the current functionality of the tool. If you've never parsed before, or even
 if you have, it might be a bit of a trick to get it doing anything other than 
 the demo functionality. In a nutshell:
-
-  1. Your code gets slurped whole into a CodeStream so that it can be doled out
-     as a stream of tokens, one for each character.
-  2. The scanner talks to the CodeStream to get text tokens to parse, building 
-     up the lexical structure of your grammar. But only when Scanner.ReadToken()
-     is called by...
-  3. ...the parser, which checks the grammar against a list of productions and 
-     sends completed productions off to the compiler, (which might as well be an
-     interpreter).
 
 --Hard-coded filenames. No UI, graphical or otherwise, for this. Simply edit the
 strings in the source. It's on its way, though!
@@ -62,12 +84,19 @@ consuming tokens 	until it gets an answer one way or the other.
 
 None of that will make any sense to you in terms of GrammarNode objects if 
 you've never considered manually creating a syntax tree before. Or maybe even if
- you have.
+you have.
 
-I'm undecided on left-recursion checks. They fail early, and if I give you an
-error message, you'll blame me. If you go hunting on the Net for an answer,
-you'll blame yourself and leave me alone. Decisions, decisions, ....
+--CleanUp() should be called by the compiler on EOF, not by the parser. It's a
+matter of adding "EOF" to ScannerNames and ParserNames.
 
 --Wayyy too much fun. In spite of, or maybe because of, the issues above, it's
-crazy amounts of fun to input a file and watch tokens stream out the other end
-of the thing into another file.
+crazy amounts of fun to input a file and watch a useful compiled syntax tree
+come out the other end.
+
+FUTURE WORK:
+--Would like to parse command-line arguments with the parser itself. Should be a
+  simple trick, but will prove the technology in a "real world" example.
+--Needs a GUI with a REPL. This fiddling with commenting bits out is getting old.
+--I have the full EBNF for Scheme R6. I need to build this ASAP to provide
+  another even more "real world" example.
+--Ideas? Ping me at mknorman at that mail service provided by Google "." com.

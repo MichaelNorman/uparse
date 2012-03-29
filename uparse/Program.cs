@@ -12,6 +12,7 @@ namespace uparse
     {
         static void Main(string[] args)
         {
+            // The preparation:
             CodeStream code_tokens = new CodeStream(File.OpenText(@"..\..\..\Samples\ebnf_ebnf.txt").ReadToEnd());
             //EBNF ebnf = new EBNF();
             Stream ebnfStream = File.OpenRead(@"..\..\..\Samples\compiled_ebnf.persist");
@@ -26,15 +27,17 @@ namespace uparse
                                                    ebnf.ParserNames,
                                                    ebnf.ParserProductions);
 
+            // The business:
             EBNFLanguageParser.Parse();
+
             Console.WriteLine(Directory.GetCurrentDirectory());
             Console.ReadKey();
 
-            Stream PersistenceStream = File.Create(@"..\..\..\Samples\hand_built_ebnf.persist");
-            BinaryFormatter BF = new BinaryFormatter();
-            BF.Serialize(PersistenceStream, ebnf);
-            PersistenceStream.Flush();
-            PersistenceStream.Close();
+            //Stream PersistenceStream = File.Create(@"..\..\..\Samples\hand_built_ebnf.persist");
+            //BinaryFormatter BF = new BinaryFormatter();
+            //BF.Serialize(PersistenceStream, ebnf);
+            //PersistenceStream.Flush();
+            //PersistenceStream.Close();
         }
     }
 }

@@ -488,7 +488,7 @@ namespace UniversalParser
                 {
                     eof = true;
                 }
-                return scanned[i]; // We know this exists, here.
+                return scanned[i];
             }
         }
 
@@ -670,7 +670,6 @@ namespace UniversalParser
 
     }
 
-    //TODO: There's a ton of extranneous nesting going on, over and beyond just having a non-optimal compilation.
 
     public class ParserCompiler : ICompiler
     {
