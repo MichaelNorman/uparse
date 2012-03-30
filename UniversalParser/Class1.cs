@@ -600,7 +600,7 @@ namespace UniversalParser
                     break;
                 }
             }
-            this.Target.CleanUp();
+            //this.Target.CleanUp();
         }
 
     }
@@ -614,7 +614,7 @@ namespace UniversalParser
             get;
             set;
         }
-        void CleanUp();
+        //void CleanUp();
     }
 
 
@@ -705,7 +705,7 @@ namespace UniversalParser
         private string ofile;
         
         #region ICompiler Members
-        public void CleanUp()
+        private void CleanUp()
         {
             AppendEOFNodes();
             CopyTemplatesToInstances();
@@ -1045,6 +1045,11 @@ namespace UniversalParser
             if (!ScannerNames.Contains("EOF"))
             {
                 ScannerNames.Add("EOF");
+            }
+
+            if (!ParserNames.Contains("EOF"))
+            {
+                ParserNames.Add("EOF");
             }
         }
 

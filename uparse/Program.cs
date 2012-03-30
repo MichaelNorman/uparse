@@ -30,14 +30,8 @@ namespace uparse
             // The business:
             EBNFLanguageParser.Parse();
 
-            Console.WriteLine(Directory.GetCurrentDirectory());
+            Console.WriteLine("Done. Press any key to continue...");
             Console.ReadKey();
-
-            //Stream PersistenceStream = File.Create(@"..\..\..\Samples\hand_built_ebnf.persist");
-            //BinaryFormatter BF = new BinaryFormatter();
-            //BF.Serialize(PersistenceStream, ebnf);
-            //PersistenceStream.Flush();
-            //PersistenceStream.Close();
         }
     }
 }

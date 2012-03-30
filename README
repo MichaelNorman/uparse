@@ -34,12 +34,22 @@ Here are the steps the code goes through to parse and build a syntax tree:
    the Language to compiled_ebnf.persist (or whatever file you specify!).
 
 Under the hood, a language is essentially two syntax trees, composed of GrammarNodes,
-and 3 lists. These lists are: ScannerNames, the list of names provided after the
-"export" keyword in the scanner; ParserNames, likewise for the parser; and Ignore, a
-list of tokens that the scanner will recognize but skip when asked for the next
-token by the parser. **The parser can only see scanner productions that are in the
+and 3 lists. The syntax trees are for the Scanner and Parser. The lists are: 
+	ScannerNames, the list of names provided after the
+	"export" keyword in the scanner;
+	ParserNames, likewise for the parser;
+	And Ignore, a list of tokens that the scanner will recognize but skip,
+	when asked for the next token by the parser.
+	
+**The parser can only see scanner productions that are in the
 scanners export list, and the compiler can only see parser productions that are in
-the parser's ignore list.**
+the parser's ignore list.** Note that "see" has different meanings for the parser than
+for the compiler. A parser will really only receive the tokens named in the scanner's 
+export list. The compiler will receive checked TokenLists tagged with a name from the
+list ParserNames so that it can build the TokenList into a semantic unit.
+
+Don't forget to play with the simple DiagnosticCompiler to write your tokens out
+to a file. Wholesome fun!
 
 The impetus behind this project is that I had the realization that if you
 tokenize the source code, the very same engine that does the scanning 
@@ -86,12 +96,9 @@ None of that will make any sense to you in terms of GrammarNode objects if
 you've never considered manually creating a syntax tree before. Or maybe even if
 you have.
 
---CleanUp() should be called by the compiler on EOF, not by the parser. It's a
-matter of adding "EOF" to ScannerNames and ParserNames.
-
 --Wayyy too much fun. In spite of, or maybe because of, the issues above, it's
 crazy amounts of fun to input a file and watch a useful compiled syntax tree
-come out the other end.
+come out the other end, and then to use that to parse your sources!
 
 FUTURE WORK:
 --Would like to parse command-line arguments with the parser itself. Should be a
