@@ -1,3 +1,6 @@
+NOTE: Currently, EOF handling isn't working properly, causing the syntax trees
+      to fail to write out. Fix coming soon!
+      
 This is a universal parser generator that walks a syntax tree while parsing a
 file. It has a compiler that enables you to build a syntax tree to parse any
 context-free grammar that you can specify in EBNF. Conveniently, the EBNF
@@ -15,13 +18,13 @@ of the tree used to parse EBNF. This was built from the ebnf_ebnf.txt file
 mentioned earlier.
 
 Here are the steps the code goes through to parse and build a syntax tree:
-1) Program.main() in /uparse/Program.cs is the entry point. Execution starts
+1) Program.Main() in /uparse/Program.cs is the entry point. Execution starts
    here with the slurping of ebnf_ebnf.txt into a CodeStream object. A
    CodeStream produces a notional stream of tokens from a string by wrapping
    each character in a token in which both the value and token type are the
    character itself. ("b" becomes a Token such that Token.TokenType = "b" and
    Token.Value = "b"." This allows the same loop that does the parsing to also
-   do the scanning, since that loop operates on tokens.
+   do the scanning, since that loop operates on tokens.)
 2) Depending on which lines you comment out, Program.cs either creates a new
    EBNF, which derives from Language, or deserializes a Language from the
    compiled_ebnf.persist file mentioned earlier.
@@ -90,7 +93,7 @@ This causes it....
 
 The latter encounters a possible expression and asks, "Does the first part of
 this look like the first part of an expression?," and then happily continues
-consuming tokens 	until it gets an answer one way or the other.
+consuming tokens until it gets an answer one way or the other.
 
 None of that will make any sense to you in terms of GrammarNode objects if 
 you've never considered manually creating a syntax tree before. Or maybe even if
