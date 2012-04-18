@@ -596,7 +596,7 @@ namespace UniversalParser
                 Target.Build(Checker.GetProduction());
                 if (Checker.EOF)
                 {
-                    //Target.Build(Checker.GetProduction());
+                    Target.Build(Checker.GetProduction());
                     break;
                 }
             }
