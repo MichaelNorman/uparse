@@ -1,6 +1,3 @@
-NOTE: Currently, EOF handling isn't working properly, causing the syntax trees
-      to fail to write out. Fix coming soon!
-      
 This is a universal parser generator that walks a syntax tree while parsing a
 file. It has a compiler that enables you to build a syntax tree to parse any
 context-free grammar that you can specify in EBNF. Conveniently, the EBNF
